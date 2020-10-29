@@ -6,14 +6,16 @@ import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributeView;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 
 public class FileItem {
     private Path path;
     private String fileName;
     private String fileType;
     private long size;
-    private Instant creationTime;
-    private Instant lastAccessTime;
+    private LocalDate creationTime;
+    private LocalDate lastAccessTime;
 
     public Path getPath() {
         return path;
@@ -31,11 +33,11 @@ public class FileItem {
         return size;
     }
 
-    public Instant getCreationTime() {
+    public LocalDate getCreationTime() {
         return creationTime;
     }
 
-    public Instant getLastAccessTime() {
+    public LocalDate getLastAccessTime() {
         return lastAccessTime;
     }
 
@@ -43,13 +45,18 @@ public class FileItem {
         if (Files.isRegularFile(path)) {
             this.path = path;
             this.fileName = path.getFileName().toString();
-            this.fileType = this.fileName.substring(this.fileName.lastIndexOf(".") + 1);
+            if (this.fileName.contains(".")) {
+                this.fileType = this.fileName.substring(this.fileName.lastIndexOf('.') + 1);
+
+            } else {
+                this.fileType = "unknown";
+            }
             try {
                 this.size = Files.isRegularFile(path) ? Files.size(path) : 0L;
                 BasicFileAttributeView bfv = Files.getFileAttributeView(path, BasicFileAttributeView.class);
                 BasicFileAttributes bfa = bfv.readAttributes();
-                this.creationTime = Instant.ofEpochMilli(bfa.creationTime().toMillis());
-                this.lastAccessTime = Instant.ofEpochMilli(bfa.lastAccessTime().toMillis());
+                this.creationTime = LocalDate.from(Instant.ofEpochMilli(bfa.creationTime().toMillis()).atZone(ZoneId.systemDefault()).toLocalDate());
+                this.lastAccessTime = LocalDate.from(Instant.ofEpochMilli(bfa.lastAccessTime().toMillis()).atZone(ZoneId.systemDefault()).toLocalDate());
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -60,11 +67,11 @@ public class FileItem {
 
     @Override
     public String toString() {
-        return  "Path: " + path + "\n" +
-                "FileName: " + fileName + "\n" +
-                "FileType: " + fileType + "\n" +
-                "Size: " + size + " bytes\n" +
-                "Created: " + creationTime + "\n" +
-                "LastAccess: " + lastAccessTime + "\n";
+        return  "Path: " + path + " | " +
+                "FileName: " + fileName + " | " +
+                "FileType: " + fileType + " | " +
+                "Size: " + size + " bytes | " +
+                "Created: " + creationTime + " | " +
+                "LastAccess: " + lastAccessTime;
     }
 }

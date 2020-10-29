@@ -1,145 +1,104 @@
 package ru.kamuzta.bigfilearchiver;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.nio.file.DirectoryStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.attribute.AclEntry;
-import java.nio.file.attribute.AclFileAttributeView;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.PriorityQueue;
+import java.io.*;
+import java.nio.file.*;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.time.*;
+import java.time.format.DateTimeFormatter;
+import java.util.*;
 
 public class BigFileArchiver {
-
+    private static SearchFileVisitor searchFileVisitor;
+    private static Path dirPath;
+    private static Path logFile;
+    private static FileWriter fwLog;
+    private static LocalDate accessDate;
+    private static int fileSize;
+    private static List<String> fileTypesList = new ArrayList<String>();
 
     public static void main(String[] args) {
-        Path file = Paths.get("F:/javaprojects/files");
-        FileItem fileItem;
+        getOptions(); //configuring program
+
+        //Collecting all files
         try {
-            fileItem = new FileItem(file);
-        } catch (Exception e) {
-            System.out.println("Path is not a Regular File");
+            searchFileVisitor = new SearchFileVisitor();
+            Files.walkFileTree(dirPath, searchFileVisitor);
+        } catch (AccessDeniedException ade) {
+            writeLogfile(fwLog, "Access denied: " + ade.getMessage());
+        } catch (IOException e) {
+            e.printStackTrace();
         }
-        /*BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
-        String dirName = br.readLine();
-        br.close();
-        Path dirPath = Paths.get(dirName);
-        if (!Files.isDirectory(dirPath)) {
-            System.out.println(dirPath.normalize().toString() + " - не папка");
-        } else {
-            //SearchFileVisitor sfv = new SearchFileVisitor();
-            //Files.walkFileTree(dirPath, sfv);
-            List<Item> itemList = getFileTree(dirName);
-            System.out.println("Всего папок - " + getDirCount(itemList));
-            System.out.println("Всего файлов - " + getFileCount(itemList));
-            System.out.println("Общий размер - " + getFullSize(itemList));
-        }*/
-    }
+        writeLogfile(fwLog, "Total files in search directory: " + searchFileVisitor.getFoundItems().size());
 
-/*
-    public static List<Item> getFileTree(String root) throws IOException {
-        List<Item> fileTree = new ArrayList<Item>();
-        PriorityQueue<Path> queue = new PriorityQueue<Path>();
-        queue.add(Paths.get(root));
-        while (!queue.isEmpty()) {
-            Path currentDir = queue.peek();
-            DirectoryStream<Path> stream = Files.newDirectoryStream(currentDir);
-            for (Path file : stream) {
-                if (!Files.isDirectory(file)) {
-                    fileTree.add(new Item(file.toAbsolutePath()));
-                } else  if (Files.isDirectory(file)){
-                    fileTree.add(new Item(file.toAbsolutePath()));
-                    queue.offer(file);
-                }
-            }
-            queue.poll();
-        }
-        return fileTree;
-    }
-
-    public static int getDirCount(List<Item> itemList) {
-        int countDir = 0;
-        for (Item item : itemList) {
-            if (!item.isFile) {
-                countDir++;
+        //What to do with founded files?
+        for (FileItem item : searchFileVisitor.getFoundItems()) {
+            if (fileTypesList.contains(item.getFileType()) && fileSize < item.getSize() && accessDate.isAfter(item.getLastAccessTime()) ) {
+                System.out.println(item);
+                writeLogfile(fwLog, item.toString());
             }
         }
-        return countDir;
-    }
 
-    public static int getFileCount(List<Item> itemList) {
-        int count = 0;
-        for (Item item : itemList) {
-            if (item.isFile) {
-                count++;
-            }
-        }
-        return count;
-    }
+        //close log-file
+        try { fwLog.close(); } catch (IOException ioe) { ioe.printStackTrace(); }
 
-    public static long getFullSize(List<Item> itemList) {
-        long fullSize = 0;
-        for (Item item : itemList) {
-            if (item.isFile) {
-                fullSize += item.size;
-            }
-        }
-        return fullSize;
     }
 
     public static class SearchFileVisitor extends SimpleFileVisitor<Path> {
-        private static List<Item> foundPaths = new ArrayList<Item>();
-        public List<Item> getFoundPaths() {
-            return foundPaths;
-        }
+        private static List<FileItem> foundItems = new ArrayList<FileItem>();
 
-        public int getDirCount() {
-            int count = 0;
-            for (Item item : foundPaths) {
-                if (!item.isFile) {
-                    count++;
-                }
-            }
-            return count;
-        }
-
-        public int getFileCount() {
-            int count = 0;
-            for (Item item : foundPaths) {
-                if (item.isFile) {
-                    count++;
-                }
-            }
-            return count;
-        }
-
-        public long getFullSize() {
-            long fullSize = 0;
-            for (Item item : foundPaths) {
-                if (item.isFile) {
-                    fullSize += item.size;
-                }
-            }
-            return fullSize;
+        public List<FileItem> getFoundItems() {
+            return foundItems;
         }
 
         @Override
         public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
-            foundPaths.add(new Item(file));
+            if (Files.isRegularFile(file)) {
+                try {
+                    foundItems.add(new FileItem(file));
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
             return FileVisitResult.CONTINUE;
         }
 
-        @Override
-        public FileVisitResult visitFileFailed(Path file, IOException exc) {
-            return FileVisitResult.SKIP_SUBTREE;
+    }
+
+    public static void writeLogfile(FileWriter fwLog, String input) {
+        try {
+            fwLog.write(input + "\n");
+        } catch (IOException ioe) {
+            ioe.printStackTrace();
         }
     }
 
- */
-}
+    public static void getOptions() {
+        BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+        try {
+            System.out.print("Enter the start directory address: ");
+            dirPath = Paths.get(br.readLine());
 
+            System.out.print("Enter filetype(separated by spaces): ");
+            fileTypesList = Arrays.asList(br.readLine().split(" "));
+
+            System.out.print("Enter the date(dd.MM.yyyy): ");
+            DateTimeFormatter dtf = DateTimeFormatter.ofPattern("dd.MM.yyyy");
+            accessDate = LocalDate.parse(br.readLine(), dtf);
+
+            System.out.print("Enter the minimum file size in Mb: ");
+            fileSize = Integer.parseInt(br.readLine());
+
+            logFile = Files.createFile(dirPath.resolve("BFA_log.log"));
+            fwLog = new FileWriter(logFile.toFile());
+
+            writeLogfile(fwLog, "Program started: " + Instant.now().toString());
+            writeLogfile(fwLog, "File types: " + fileTypesList.toString());
+            writeLogfile(fwLog, "Minimum file size in Mb: " + fileSize);
+            writeLogfile(fwLog, "Last access date: " + accessDate.format(dtf));
+            writeLogfile(fwLog, "\n");
+
+        } catch (IOException ioe) {
+            ioe.printStackTrace();
+        }
+    }
+}
