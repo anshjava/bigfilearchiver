@@ -71,6 +71,7 @@ public class BigFileArchiver {
                     zip.putNextEntry(new ZipEntry(item.getFileName()));
                     Files.copy(item.getPath(), zip);
                     zip.close();
+                    Files.delete(item.getPath());
                     System.out.println("achived: " + item.getPath());
                     writeLogfile(fwLog, "achived: " + item.getPath());
                     filesWasArchived++;
