@@ -6,6 +6,8 @@ import java.nio.file.attribute.BasicFileAttributes;
 import java.time.*;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 public class BigFileArchiver {
     private static SearchFileVisitor searchFileVisitor;
@@ -15,6 +17,9 @@ public class BigFileArchiver {
     private static LocalDate accessDate;
     private static int fileSize;
     private static List<String> fileTypesList = new ArrayList<String>();
+    private static int totalFilesInDir = 0;
+    private static int filesToArchive = 0;
+    private static int filesWasArchived = 0;
 
     public static void main(String[] args) {
         getOptions(); //configuring program
@@ -28,14 +33,28 @@ public class BigFileArchiver {
         } catch (IOException e) {
             e.printStackTrace();
         }
-        writeLogfile(fwLog, "Total files in search directory: " + searchFileVisitor.getFoundItems().size());
 
-        //What to do with founded files?
+        totalFilesInDir = searchFileVisitor.getFoundItems().size();
+        writeLogfile(fwLog, "Total files in search directory: " + totalFilesInDir);
+
         for (FileItem item : searchFileVisitor.getFoundItems()) {
             if (fileTypesList.contains(item.getFileType()) && fileSize < item.getSize() && accessDate.isAfter(item.getLastAccessTime()) ) {
-                System.out.println(item);
-                writeLogfile(fwLog, item.toString());
+                filesToArchive++;
             }
+        }
+        writeLogfile(fwLog, "Number of files that match the criteria: " + filesToArchive);
+        System.out.print(filesToArchive + " files was founded. Archive & delete them?[Y/N]: ");
+
+        BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+        String answer = "";
+        try { answer = br.readLine(); } catch (IOException ioe) { ioe.printStackTrace(); }
+
+        if (!answer.equals("Y") && !answer.equals("y") ) {
+            writeLogfile(fwLog, "Process aborted by user");
+            System.exit(0);
+        } else {
+            System.out.println("ARCHIVING STARTED!");
+            archiveFiles(searchFileVisitor.getFoundItems());
         }
 
         //close log-file
@@ -43,7 +62,28 @@ public class BigFileArchiver {
 
     }
 
-    public static class SearchFileVisitor extends SimpleFileVisitor<Path> {
+    private static void archiveFiles(List<FileItem> items) {
+        for (FileItem item : items) {
+            try {
+                if (fileTypesList.contains(item.getFileType()) && fileSize < item.getSize() && accessDate.isAfter(item.getLastAccessTime())) {
+                    FileOutputStream zipFile = new FileOutputStream(item.getPath() + ".zip");
+                    ZipOutputStream zip = new ZipOutputStream(zipFile);
+                    zip.putNextEntry(new ZipEntry(item.getFileName()));
+                    Files.copy(item.getPath(), zip);
+                    zip.close();
+                    System.out.println("achived: " + item.getPath());
+                    writeLogfile(fwLog, "achived: " + item.getPath());
+                    filesWasArchived++;
+                }
+            } catch (IOException ioe) {
+                System.out.println("error: " + item.getPath());
+                writeLogfile(fwLog, "error: " + item.getPath());
+            }
+        }
+        writeLogfile(fwLog, filesWasArchived + " files was archived!");
+    }
+
+    private static class SearchFileVisitor extends SimpleFileVisitor<Path> {
         private static List<FileItem> foundItems = new ArrayList<FileItem>();
 
         public List<FileItem> getFoundItems() {
@@ -64,15 +104,16 @@ public class BigFileArchiver {
 
     }
 
-    public static void writeLogfile(FileWriter fwLog, String input) {
+    private static void writeLogfile(FileWriter fwLog, String input) {
         try {
             fwLog.write(input + "\n");
+            fwLog.flush();
         } catch (IOException ioe) {
             ioe.printStackTrace();
         }
     }
 
-    public static void getOptions() {
+    private static void getOptions() {
         BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
         try {
             System.out.print("Enter the start directory address: ");
@@ -85,15 +126,20 @@ public class BigFileArchiver {
             DateTimeFormatter dtf = DateTimeFormatter.ofPattern("dd.MM.yyyy");
             accessDate = LocalDate.parse(br.readLine(), dtf);
 
-            System.out.print("Enter the minimum file size in Mb: ");
+            System.out.print("Enter the minimum file size in bytes: ");
             fileSize = Integer.parseInt(br.readLine());
 
-            logFile = Files.createFile(dirPath.resolve("BFA_log.log"));
+            try {
+                logFile = Files.createFile(dirPath.resolve("BFA_log.log"));
+            } catch (FileAlreadyExistsException e) {
+                logFile = dirPath.resolve("BFA_log.log");
+            }
+
             fwLog = new FileWriter(logFile.toFile());
 
-            writeLogfile(fwLog, "Program started: " + Instant.now().toString());
+            writeLogfile(fwLog, "Program started: " + LocalDate.now().format(dtf));
             writeLogfile(fwLog, "File types: " + fileTypesList.toString());
-            writeLogfile(fwLog, "Minimum file size in Mb: " + fileSize);
+            writeLogfile(fwLog, "Minimum file size in bytes: " + fileSize);
             writeLogfile(fwLog, "Last access date: " + accessDate.format(dtf));
             writeLogfile(fwLog, "\n");
 

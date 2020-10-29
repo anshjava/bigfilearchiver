@@ -11,11 +11,16 @@ import java.time.ZoneId;
 
 public class FileItem {
     private Path path;
+    private String directoryName;
     private String fileName;
     private String fileType;
     private long size;
     private LocalDate creationTime;
     private LocalDate lastAccessTime;
+
+    public String getDirectoryName() {
+        return directoryName;
+    }
 
     public Path getPath() {
         return path;
@@ -45,6 +50,7 @@ public class FileItem {
         if (Files.isRegularFile(path)) {
             this.path = path;
             this.fileName = path.getFileName().toString();
+            this.directoryName = path.getParent().toString();
             if (this.fileName.contains(".")) {
                 this.fileType = this.fileName.substring(this.fileName.lastIndexOf('.') + 1);
 
@@ -67,7 +73,7 @@ public class FileItem {
 
     @Override
     public String toString() {
-        return  "Path: " + path + " | " +
+        return  "Directory: " + directoryName + " | " +
                 "FileName: " + fileName + " | " +
                 "FileType: " + fileType + " | " +
                 "Size: " + size + " bytes | " +
